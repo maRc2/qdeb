@@ -92,7 +92,7 @@ while getopts $options option; do
 done
 
 # Debootstrap the base system
-#qemu-debootstrap --foreign --arch "${arch}" "${version}" "${dir}" "${repo}"
+qemu-debootstrap --foreign --arch "${arch}" "${version}" "${dir}" "${repo}"
 
 # Write hostname
 echo "${hostname}" > "${dir}/etc/hostname"
