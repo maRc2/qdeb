@@ -1,3 +1,4 @@
 sudo
-build-essential
 openssh-server
+build-essential
+git

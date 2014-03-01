@@ -4,7 +4,8 @@
 # 
 # You have to provide arch and debian version.
 # You may also provide a sources.list configuration and additional
-# whitelist packages to be installed or blacklist packages to be removed.
+# whitelist packages and source dependencies to be installed or blacklist
+# packages to be removed.
 #
 # You need to run this script as root or with sudo.
 
@@ -15,8 +16,10 @@ Available options:
 -d dir\t\tDebootstrap to dir
 -s sourcelist\tsource.list configuration
 -w whitelist\tList of packages to install
+-e deplist\tList of source dependencies to install
 -b blacklist\tList of packages to remove
--n hostname\tSet a hostname" 1>&2
+-n hostname\tSet a hostname
+-z \t\tTar gz the filesystem" 1>&2
   exit 1
 }
 
@@ -37,10 +40,12 @@ repo="http://ftp.debian.org/debian/"
 dir="rootfs"
 white=false
 black=false
-surce=false
+source=false
+dep=false
+tar=false
 
 # Process optional parameters
-options='d:hw:b:s:n:'
+options='d:hw:b:s:n:e:z'
 while getopts $options option; do
 	case $option in
     d)
@@ -58,8 +63,15 @@ while getopts $options option; do
       sourceList=${OPTARG}
       source=true
       ;;
+    e)
+      depList=${OPTARG}
+      dep=true
+      ;;
     n) 
       hostname=${OPTARG}
+      ;;
+    z)
+      tar=true
       ;;
     h)
       usage
@@ -80,10 +92,10 @@ while getopts $options option; do
 done
 
 # Debootstrap the base system
-qemu-debootstrap --foreign --arch "${arch}" "${version}" "${dir}" "${repo}"
+#qemu-debootstrap --foreign --arch "${arch}" "${version}" "${dir}" "${repo}"
 
 # Write hostname
-echo "${hostname}" > ${dir}/etc/hostname
+echo "${hostname}" > "${dir}/etc/hostname"
 
 # Write package list
 if $source; then
@@ -100,7 +112,22 @@ if $white; then
   chroot "${dir}" apt-get -y install `tr '\n' ' ' < "${whiteList}"`
 fi
 
+# Install souce dependencies
+if $dep; then
+  chroot "${dir}" apt-get -y build-dep `tr '\n' ' ' < "${depList}"`
+fi
+
 # Remove packages from blacklist
 if $black; then
   chroot "${dir}" apt-get -y remove --purge `tr '\n' ' ' < "${blackList}"`
+fi
+
+# Empty apt cache
+chroot "${dir}" apt-get clean
+
+# Tar gz the filesystem
+if $tar; then
+  cd ${dir}
+  tar -czvf "../${dir}.tar.gz" .
+  cd ..
 fi
