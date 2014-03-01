@@ -1,0 +1,2 @@
+deb http://ftp.at.debian.org/debian stable main contrib non-free
+deb-src http://ftp.at.debian.org/debian stable main contrib non-free
