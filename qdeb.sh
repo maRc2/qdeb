@@ -13,11 +13,13 @@ usage() {
   echo -e "Usage: ARCHITECTURE VERSION [OPTIONS]
 
 Available options:
+-h\t\t Show this help
 -d dir\t\tDebootstrap to dir
 -s sourcelist\tsource.list configuration
 -w whitelist\tList of packages to install
 -e deplist\tList of source dependencies to install
 -b blacklist\tList of packages to remove
+-p postinstall\tPostinstall script run after installation
 -n hostname\tSet a hostname
 -z \t\tTar gz the filesystem" 1>&2
   exit 1
@@ -43,9 +45,10 @@ black=false
 source=false
 dep=false
 tar=false
+post=false
 
 # Process optional parameters
-options='d:hw:b:s:n:e:z'
+options='d:hw:b:s:n:e:zp:'
 while getopts $options option; do
 	case $option in
     d)
@@ -66,6 +69,10 @@ while getopts $options option; do
     e)
       depList=${OPTARG}
       dep=true
+      ;;
+    p)
+      postinstall=${OPTARG}
+      post=true
       ;;
     n) 
       hostname=${OPTARG}
@@ -97,10 +104,14 @@ qemu-debootstrap --foreign --arch "${arch}" "${version}" "${dir}" "${repo}"
 # Write hostname
 echo "${hostname}" > "${dir}/etc/hostname"
 
+mount -t proc proc "${dir}/proc"
+mount -t sysfs sys "${dir}/sys"
+mount -o bind /dev "${dir}/dev"
+
 # Write package list
 if $source; then
   while read line; do
-    echo $line >> ${dir}/etc/apt/sources.list
+    echo $line >> "${dir}/etc/apt/sources.list"
   done < ${sourceList}
 fi
 
@@ -110,11 +121,13 @@ chroot "${dir}" apt-get update
 # Install packages from whitelist
 if $white; then
   chroot "${dir}" apt-get -y install `tr '\n' ' ' < "${whiteList}"`
+  chroot "${dir}" ldconfig
 fi
 
 # Install souce dependencies
 if $dep; then
   chroot "${dir}" apt-get -y build-dep `tr '\n' ' ' < "${depList}"`
+  chroot "${dir}" ldconfig
 fi
 
 # Remove packages from blacklist
@@ -122,12 +135,16 @@ if $black; then
   chroot "${dir}" apt-get -y remove --purge `tr '\n' ' ' < "${blackList}"`
 fi
 
+# Remove packages from blacklist
+if $post; then
+  cp $postinstall "${dir}/root/"
+  chroot "${dir}" "./root/${postinstall}"
+fi
+
 # Empty apt cache
 chroot "${dir}" apt-get clean
 
 # Tar gz the filesystem
 if $tar; then
-  cd ${dir}
-  tar -czvf "../${dir}.tar.gz" .
-  cd ..
+  tar -czf "${dir}.tar.gz" -C "${dir}" .
 fi
